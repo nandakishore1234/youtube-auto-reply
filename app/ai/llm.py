@@ -16,7 +16,11 @@ prompt = reply_prompt.partial(
 )
 
 
-reply_chain = prompt | llm | parser
+structured_llm = llm.with_structured_output(
+    ReplyDraft,
+    method="json_schema",
+)
+reply_chain = prompt | structured_llm
 
 
 def generate_reply_draft(request: ReplyDraftRequest) -> ReplyDraft:

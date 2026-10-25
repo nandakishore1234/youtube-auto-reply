@@ -12,6 +12,7 @@ from app.services.youtube_oauth_service import (
     create_oauth_flow,
     exchange_code_for_channel,
 )
+from app.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -121,20 +122,23 @@ def oauth_callback(
             detail="Invalid OAuth state",
         )
 
+    settings = get_settings()
+    channels_url = f"{settings.frontend_url.rstrip('/')}/channels"
+
     if request.query_params.get("error"):
-        raise HTTPException(
-            status_code=400,
-            detail="Google authorization was denied",
+        return RedirectResponse(
+            url=f"{channels_url}?youtube=denied",
+            status_code=303,
         )
 
     if not request.query_params.get("code"):
-        raise HTTPException(
-            status_code=400,
-            detail="Google did not return an authorization code",
+        return RedirectResponse(
+            url=f"{channels_url}?youtube=failed",
+            status_code=303,
         )
 
     try:
-        channel = exchange_code_for_channel(
+        exchange_code_for_channel(
             db=db,
             user_id=int(user_id),
             authorization_response=str(request.url),
@@ -142,20 +146,15 @@ def oauth_callback(
             code_verifier=code_verifier,
         )
 
-        return {
-            "status": "connected",
-            "channel": {
-                "id": channel.id,
-                "youtube_channel_id": channel.youtube_channel_id,
-                "title": channel.title,
-            },
-            "message": "YouTube channel connected successfully.",
-        }
+        return RedirectResponse(
+            url=f"{channels_url}?youtube=connected",
+            status_code=303,
+        )
 
     except Exception as exc:
         db.rollback()
         logger.exception("YouTube OAuth callback failed")
-        raise HTTPException(
-            status_code=502,
-            detail="Unable to complete YouTube authorization",
-        ) from exc
+        return RedirectResponse(
+            url=f"{channels_url}?youtube=failed",
+            status_code=303,
+        )

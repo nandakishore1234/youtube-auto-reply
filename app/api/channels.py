@@ -37,10 +37,39 @@ def list_channels(
             "id": channel.id,
             "youtube_channel_id": channel.youtube_channel_id,
             "title": channel.title,
+            "thumbnail_url": channel.thumbnail_url,
             "status": channel.status,
         }
         for channel in channels
     ]
+
+
+@router.get("/{channel_id}")
+def get_channel(
+    channel_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    channel = db.scalar(
+        select(YouTubeChannel).where(
+            YouTubeChannel.id == channel_id,
+            YouTubeChannel.user_id == current_user.id,
+        )
+    )
+
+    if channel is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Channel not found",
+        )
+
+    return {
+        "id": channel.id,
+        "youtube_channel_id": channel.youtube_channel_id,
+        "title": channel.title,
+        "thumbnail_url": channel.thumbnail_url,
+        "status": channel.status,
+    }
 
 
 @router.post("/{channel_id}/comments/fetch")

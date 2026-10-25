@@ -84,7 +84,14 @@ def exchange_code_for_channel(
 
     for item in items:
         youtube_channel_id = item["id"]
-        title = item.get("snippet", {}).get("title", "")
+        snippet = item.get("snippet", {})
+        title = snippet.get("title", "")
+        thumbnails = snippet.get("thumbnails", {})
+        thumbnail_url = (
+            thumbnails.get("high", {}).get("url")
+            or thumbnails.get("medium", {}).get("url")
+            or thumbnails.get("default", {}).get("url")
+        )
 
         channel = db.scalar(
             select(YouTubeChannel).where(
@@ -99,12 +106,14 @@ def exchange_code_for_channel(
                 user_id=user_id,
                 youtube_channel_id=youtube_channel_id,
                 title=title,
+                thumbnail_url=thumbnail_url,
                 status="connected",
             )
             db.add(channel)
             db.flush()
         else:
             channel.title = title
+            channel.thumbnail_url = thumbnail_url
             channel.status = "connected"
 
         token_data = {

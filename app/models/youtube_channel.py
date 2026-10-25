@@ -41,6 +41,11 @@ class YouTubeChannel(Base):
         nullable=True,
     )
 
+    thumbnail_url: Mapped[str | None] = mapped_column(
+        String(500),
+        nullable=True,
+    )
+
     status: Mapped[str] = mapped_column(
         String(20),
         default="pending",
