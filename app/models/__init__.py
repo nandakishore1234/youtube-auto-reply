@@ -3,10 +3,13 @@ from app.models.youtube_channel import YouTubeChannel
 from app.models.comment import Comment
 from app.models.reply_draft import ReplyDraft
 from app.models.oauth_credential import OAuthCredential
+from app.models.thread_summary import ThreadSummary
+
 __all__ = [
     "User",
     "YouTubeChannel",
     "Comment",
     "ReplyDraft",
     "OAuthCredential",
+    "ThreadSummary",
 ]

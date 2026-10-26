@@ -134,22 +134,40 @@ def fetch_recent_video_ids(youtube, max_videos: int = 5) -> list[str]:
 
 
 
+
 def fetch_video_comments(
     youtube,
     video_id: str,
     max_pages: int = 1,
+    max_reply_pages: int = 1,
 ) -> list[dict]:
-    """
-    Fetch top-level comments for one YouTube video.
-
-    max_pages=1 fetches at most 100 comment threads.
-    """
+    """Fetch top-level comments and a bounded number of replies."""
     from googleapiclient.errors import HttpError
 
     comments = []
     page_token = None
 
-    for _ in range(max_pages):
+    def extract_comment(item, parent_id=None):
+        snippet = item.get("snippet", {})
+        comment_id = item.get("id")
+        text = (
+            snippet.get("textOriginal")
+            or snippet.get("textDisplay")
+            or ""
+        ).strip()
+
+        if not comment_id or not text:
+            return None
+
+        return {
+            "youtube_comment_id": comment_id,
+            "youtube_video_id": video_id,
+            "parent_youtube_comment_id": parent_id,
+            "author_display_name": snippet.get("authorDisplayName"),
+            "text": text,
+        }
+
+    for _ in range(max(0, max_pages)):
         try:
             response = youtube.commentThreads().list(
                 part="snippet",
@@ -159,41 +177,56 @@ def fetch_video_comments(
                 textFormat="plainText",
             ).execute()
         except HttpError as exc:
-            # Comments may be disabled or unavailable for this video.
             if exc.resp.status in (403, 404):
                 break
             raise
 
         for thread in response.get("items", []):
-            snippet = thread.get("snippet", {})
-            top_comment = snippet.get("topLevelComment", {})
-            comment_data = top_comment.get("snippet", {})
+            thread_snippet = thread.get("snippet", {})
+            top_comment = thread_snippet.get("topLevelComment", {})
+            top_id = top_comment.get("id")
 
-            youtube_comment_id = top_comment.get("id")
-            text = (
-                comment_data.get("textOriginal")
-                or comment_data.get("textDisplay")
-                or ""
-            ).strip()
-
-            if not youtube_comment_id or not text:
+            top_item = extract_comment(top_comment)
+            if top_item is None:
                 continue
 
-            comments.append({
-                "youtube_comment_id": youtube_comment_id,
-                "youtube_video_id": snippet.get("videoId", video_id),
-                "parent_youtube_comment_id": None,
-                "author_display_name": comment_data.get(
-                    "authorDisplayName"
-                ),
-                "text": text,
-            })
+            comments.append(top_item)
+
+            # Fetch replies only when YouTube reports that replies exist.
+            total_replies = thread_snippet.get("totalReplyCount", 0)
+            if not top_id or total_replies <= 0:
+                continue
+
+            reply_token = None
+            for _ in range(max(0, max_reply_pages)):
+                try:
+                    reply_response = youtube.comments().list(
+                        part="snippet",
+                        parentId=top_id,
+                        maxResults=100,
+                        pageToken=reply_token,
+                        textFormat="plainText",
+                    ).execute()
+                except HttpError as exc:
+                    if exc.resp.status in (403, 404):
+                        break
+                    raise
+
+                for reply in reply_response.get("items", []):
+                    reply_item = extract_comment(reply, parent_id=top_id)
+                    if reply_item is not None:
+                        comments.append(reply_item)
+
+                reply_token = reply_response.get("nextPageToken")
+                if not reply_token:
+                    break
 
         page_token = response.get("nextPageToken")
         if not page_token:
             break
 
     return comments
+
 
 
 
@@ -245,7 +278,7 @@ def fetch_and_process_channel_comments(
                     channel_id=channel.id,
                     youtube_comment_id=item["youtube_comment_id"],
                     youtube_video_id=item["youtube_video_id"],
-                    parent_youtube_comment_id=None,
+                    parent_youtube_comment_id=item["parent_youtube_comment_id"],
                     author_display_name=item["author_display_name"],
                     text=item["text"],
                     channel_tone="Friendly, natural, and respectful",

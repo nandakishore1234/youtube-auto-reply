@@ -136,7 +136,11 @@ def generate_and_save_draft(
             intent=generated_draft.intent,
             needs_human_review=True,
             status="pending_approval",
-            review_reason=generated_draft.reason,
+            review_reason=(
+            result.get("policy_reason")
+            or result.get("moderation_error")
+            or generated_draft.reason
+            ),
         )
 
         db.add(draft)

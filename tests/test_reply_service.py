@@ -1,12 +1,24 @@
+
 from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.auth import get_current_user
 from app.ai.schema import ReplyDraft
 
 
+class FakeUser:
+    id = 2
+
+
+app.dependency_overrides[get_current_user] = lambda: FakeUser()
+
 client = TestClient(app)
+
+
+def teardown_module():
+    app.dependency_overrides.pop(get_current_user, None)
 
 
 def test_draft_endpoint_returns_structured_reply():
